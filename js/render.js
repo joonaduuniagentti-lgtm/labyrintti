@@ -12,6 +12,7 @@ export const FONT = 'ui-rounded, "SF Pro Rounded", "Nunito", "Arial Rounded MT B
 // ---------------------------------------------------------------- ovi
 export function doorGeometry(g) {
   const L = g.level, d = L.door, c = g.cell;
+  const zoom = c / (g.layerCell || c);
   const rc = g.cellCenter(d.x, d.y);
   let cx = rc.x, cy = rc.y;
   const horizontal = d.dir === N || d.dir === S;
@@ -19,21 +20,22 @@ export function doorGeometry(g) {
   else if (d.dir === S) cy += c / 2;
   else if (d.dir === W) cx -= c / 2;
   else cx += c / 2;
-  const len = c * 0.98;
-  const thick = Math.max(12, g.wallW * 1.9);
   const k = Math.max(1, L.keys.length);
+  const len = c * (k >= 4 ? 1.45 : 0.98);
+  const thick = Math.max(12 * zoom, g.wallW * 1.9 * zoom);
+  const span = len * 0.84;
   const holes = [];
   for (let i = 0; i < k; i++) {
-    const off = ((i + 0.5) / k - 0.5) * len * 0.78;
+    const off = ((i + 0.5) / k - 0.5) * span;
     holes.push(horizontal ? { x: cx + off, y: cy } : { x: cx, y: cy + off });
   }
-  const holeR = Math.min(thick * 0.34, ((len * 0.78) / k) * 0.36);
-  return { cx, cy, horizontal, len, thick, holes, holeR };
+  const holeR = Math.min(thick * 0.34, (span / k) * 0.4);
+  return { cx, cy, horizontal, len, thick, holes, holeR, span };
 }
 
 // ---------------------------------------------------------------- staattinen kerros
-function wallSegments(g) {
-  const L = g.level, c = g.cell, ox = g.ox, oy = g.oy;
+function wallSegments(g, ox, oy, c) {
+  const L = g.level;
   const segs = [];
   const add = (x1, y1, x2, y2, room) => segs.push({ x1: ox + x1 * c, y1: oy + y1 * c, x2: ox + x2 * c, y2: oy + y2 * c, room });
   for (let y = 0; y < L.rows; y++) {
@@ -312,26 +314,41 @@ function bgDeco(s, kind, vw, vh, rng) {
   }
 }
 
+// Kaksi kerrosta: ruudun kokoinen tausta ja labyrintin kokoinen lauta.
+// Lauta piirretään ruutukoolla g.baseCell; kamera siirtää ja tarvittaessa skaalaa sitä.
 export function buildStatic(g) {
   const { vw, vh, dpr } = g;
-  const T = g.theme, L = g.level, c = g.cell, ww = g.wallW;
-  const W_ = Math.round(vw * dpr), H_ = Math.round(vh * dpr);
-  const cv = g.staticLayer || document.createElement('canvas');
-  cv.width = W_;
-  cv.height = H_;
-  const s = cv.getContext('2d');
-  s.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const T = g.theme, L = g.level, c = g.baseCell, ww = g.wallW;
   const rng = makeRng((L.seed ^ 0x5bd1e995) >>> 0);
 
-  const grad = s.createLinearGradient(0, 0, 0, vh);
+  // tausta
+  const bg = g.bgLayer || document.createElement('canvas');
+  bg.width = Math.round(vw * dpr);
+  bg.height = Math.round(vh * dpr);
+  const b = bg.getContext('2d');
+  b.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const grad = b.createLinearGradient(0, 0, 0, vh);
   grad.addColorStop(0, T.bg[0]);
   grad.addColorStop(1, T.bg[1]);
-  s.fillStyle = grad;
-  s.fillRect(0, 0, vw, vh);
-  bgDeco(s, T.bgDeco, vw, vh, rng);
+  b.fillStyle = grad;
+  b.fillRect(0, 0, vw, vh);
+  bgDeco(b, T.bgDeco, vw, vh, rng);
+  g.bgLayer = bg;
 
   // lauta
-  const bx = g.ox - ww * 0.5, by = g.oy - ww * 0.5, bw = L.cols * c + ww, bh = L.rows * c + ww;
+  const m = Math.ceil(ww * 0.5 + 28);
+  const lw = L.cols * c + m * 2, lh = L.rows * c + m * 2;
+  const ldpr = Math.min(dpr, g.scrollMode ? 2 : 3);
+  const cv = g.mazeLayer || document.createElement('canvas');
+  cv.width = Math.round(lw * ldpr);
+  cv.height = Math.round(lh * ldpr);
+  const s = cv.getContext('2d');
+  s.setTransform(ldpr, 0, 0, ldpr, 0, 0);
+  s.clearRect(0, 0, lw, lh);
+  const ox = m, oy = m;
+  const center = (x, y) => ({ x: ox + (x + 0.5) * c, y: oy + (y + 0.5) * c });
+
+  const bx = ox - ww * 0.5, by = oy - ww * 0.5, bw = L.cols * c + ww, bh = L.rows * c + ww;
   s.save();
   s.shadowColor = 'rgba(0,0,0,0.28)';
   s.shadowBlur = 16;
@@ -342,16 +359,17 @@ export function buildStatic(g) {
   s.restore();
   s.fillStyle = T.floorB;
   for (let y = 0; y < L.rows; y++) {
-    for (let x = 0; x < L.cols; x++) if ((x + y) % 2) s.fillRect(g.ox + x * c, g.oy + y * c, c, c);
+    for (let x = 0; x < L.cols; x++) if ((x + y) % 2) s.fillRect(ox + x * c, oy + y * c, c, c);
   }
   for (let y = 0; y < L.rows; y++) {
     for (let x = 0; x < L.cols; x++) {
       if (inRoom(L, x, y)) continue;
-      floorDeco(s, T.floorDeco, g.ox + (x + 0.5) * c, g.oy + (y + 0.5) * c, c, rng);
+      const p = center(x, y);
+      floorDeco(s, T.floorDeco, p.x, p.y, c, rng);
     }
   }
   // aloituspaikka: pieni pehmeä matto
-  const st = g.cellCenter(L.start.x, L.start.y);
+  const st = center(L.start.x, L.start.y);
   s.beginPath();
   s.ellipse(st.x, st.y + c * 0.18, c * 0.36, c * 0.2, 0, 0, Math.PI * 2);
   s.fillStyle = 'rgba(255,255,255,0.35)';
@@ -359,7 +377,7 @@ export function buildStatic(g) {
 
   // haamun huone
   const r = L.room;
-  const rx = g.ox + r.x * c, ry = g.oy + r.y * c, rw = r.w * c, rh = r.h * c;
+  const rx = ox + r.x * c, ry = oy + r.y * c, rw = r.w * c, rh = r.h * c;
   s.fillStyle = T.roomFloor;
   s.fillRect(rx, ry, rw, rh);
   roundRectPath(s, rx + c * 0.12, ry + c * 0.12, rw - c * 0.24, rh - c * 0.24, c * 0.18);
@@ -373,55 +391,28 @@ export function buildStatic(g) {
   }
 
   // seinät erillisellä kerroksella, jotta pintakuvio osuu vain seiniin
-  const segs = wallSegments(g);
+  const segs = wallSegments(g, ox, oy, c);
   const wc = document.createElement('canvas');
-  wc.width = W_;
-  wc.height = H_;
+  wc.width = cv.width;
+  wc.height = cv.height;
   const w = wc.getContext('2d');
-  w.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawWallLayer(w, segs.filter((q) => !q.room), ww, { main: T.wall, shadow: T.wallShadow, hi: T.wallHi }, T.wallStyle, T, rng, vw, vh);
+  w.setTransform(ldpr, 0, 0, ldpr, 0, 0);
+  drawWallLayer(w, segs.filter((q) => !q.room), ww, { main: T.wall, shadow: T.wallShadow, hi: T.wallHi }, T.wallStyle, T, rng, lw, lh);
   s.setTransform(1, 0, 0, 1, 0, 0);
   s.drawImage(wc, 0, 0);
-  w.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawWallLayer(w, segs.filter((q) => q.room), ww * 1.15,
-    { main: T.roomWall, shadow: darken(T.roomWall, 0.3), hi: lighten(T.roomWall, 0.4) }, 'plain', T, rng, vw, vh);
-  s.setTransform(1, 0, 0, 1, 0, 0);
+    { main: T.roomWall, shadow: darken(T.roomWall, 0.3), hi: lighten(T.roomWall, 0.4) }, 'plain', T, rng, lw, lh);
   s.drawImage(wc, 0, 0);
-  g.staticLayer = cv;
+  wc.width = 0;
+  wc.height = 0;
+
+  g.mazeLayer = cv;
+  g.layerMargin = m;
+  g.layerCell = c;
+  g.layerSize = { w: lw, h: lh };
 }
 
 // ---------------------------------------------------------------- dynaaminen
-function drawHint(g, ctx) {
-  const h = g.hint;
-  if (!h) return;
-  const fadeIn = Math.min(1, h.t / 0.3), fadeOut = Math.min(1, (h.dur - h.t) / 0.6);
-  const a = Math.max(0, Math.min(fadeIn, fadeOut));
-  const shown = Math.min(h.path.length, Math.floor(h.t * 12) + 1);
-  ctx.save();
-  for (let i = 1; i < shown; i++) {
-    const p = g.cellCenter(h.path[i].x, h.path[i].y);
-    const tw = 0.65 + 0.35 * Math.sin(g.time * 7 + i * 0.9);
-    ctx.globalAlpha = a * 0.6;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, g.cell * 0.17, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffd60a';
-    ctx.fill();
-    ctx.globalAlpha = a;
-    drawSparkle(ctx, p.x, p.y, g.cell * 0.16 * tw, '#ffffff');
-  }
-  // vaeltava kimallus
-  if (h.path.length > 1) {
-    const f = ((h.t * 5) % (h.path.length - 1));
-    const i = Math.floor(f), k = f - i;
-    const a0 = g.cellCenter(h.path[i].x, h.path[i].y), a1 = g.cellCenter(h.path[i + 1].x, h.path[i + 1].y);
-    const mx = a0.x + (a1.x - a0.x) * k, my = a0.y + (a1.y - a0.y) * k;
-    ctx.globalAlpha = a;
-    drawSparkle(ctx, mx, my, g.cell * 0.34, '#ffd60a');
-    drawSparkle(ctx, mx, my, g.cell * 0.22, '#ffffff');
-  }
-  ctx.restore();
-}
-
 function drawItems(g, ctx) {
   const L = g.level, c = g.cell, t = g.time;
   for (const coin of L.coins) {
@@ -481,7 +472,7 @@ function drawDoor(g, ctx) {
   if (open === 0) {
     const k = g.keyholes.length;
     g.keyholes.forEach((kh, i) => {
-      const x = ((i + 0.5) / k - 0.5) * geo.len * 0.78;
+      const x = ((i + 0.5) / k - 0.5) * geo.span;
       const r = geo.holeR;
       if (kh.filled) {
         ctx.beginPath();
@@ -703,7 +694,7 @@ function drawBanner(g, ctx) {
   const b = g.banner;
   if (!b) return;
   const a = b.t < 0.25 ? b.t / 0.25 : b.t > 1.9 ? Math.max(0, (2.3 - b.t) / 0.4) : 1;
-  const cx = g.vw / 2, cy = g.oy + Math.min(g.level.rows * g.cell, g.vh) * 0.5;
+  const cx = g.vw / 2, cy = g.area.y + g.area.h * 0.5;
   ctx.save();
   ctx.globalAlpha = a;
   const sc = 0.85 + 0.15 * Math.min(1, b.t / 0.25);
@@ -724,16 +715,87 @@ function drawBanner(g, ctx) {
   ctx.restore();
 }
 
+// Isoissa kentissä: ruudun reunassa osoitin näkymättömissä oleville avaimille
+// (ja lopuksi timantille), jotta tietää mihin suuntaan kannattaa lähteä.
+function drawIndicators(g, ctx) {
+  if (!g.scrollMode || g.overview || g.state !== 'play') return;
+  const A = g.area, L = g.level;
+  const targets = L.keys.filter((k) => !k.taken).map((k) => ({ x: k.x, y: k.y, kind: 'key', color: k.color }));
+  if (!targets.length && !L.door.locked && !L.diamond.taken) targets.push({ x: L.diamond.x, y: L.diamond.y, kind: 'diamond' });
+  const cx = A.x + A.w / 2, cy = A.y + A.h / 2;
+  const R = 21, inset = R + 8;
+  const placed = [];
+  for (const t of targets) {
+    const p = g.cellCenter(t.x, t.y);
+    if (p.x > A.x && p.x < A.x + A.w && p.y > A.y && p.y < A.y + A.h) continue;
+    const dx = p.x - cx, dy = p.y - cy;
+    const kx = (A.w / 2 - inset) / Math.max(1e-6, Math.abs(dx)), ky = (A.h / 2 - inset) / Math.max(1e-6, Math.abs(dy));
+    const k = Math.min(kx, ky);
+    let ix = cx + dx * k, iy = cy + dy * k;
+    // päällekkäiset osoittimet siirretään reunaa pitkin vierekkäin
+    const vertEdge = kx < ky;
+    for (let pass = 0; pass < 6; pass++) {
+      const hit = placed.find((q) => Math.hypot(q.x - ix, q.y - iy) < R * 2.15);
+      if (!hit) break;
+      if (vertEdge) iy = Math.min(A.y + A.h - inset, Math.max(A.y + inset, iy + (iy >= hit.y ? 1 : -1) * R * 2.2));
+      else ix = Math.min(A.x + A.w - inset, Math.max(A.x + inset, ix + (ix >= hit.x ? 1 : -1) * R * 2.2));
+    }
+    placed.push({ x: ix, y: iy });
+    const ang = Math.atan2(p.y - iy, p.x - ix);
+    const hinted = g.hint && g.hint.target && g.hint.target.x === t.x && g.hint.target.y === t.y;
+    const sc = hinted ? 1 + 0.18 * Math.sin(g.time * 10) : 1 + 0.05 * Math.sin(g.time * 3);
+    ctx.save();
+    ctx.translate(ix, iy);
+    ctx.scale(sc, sc);
+    ctx.save();
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(R + 11, 0);
+    ctx.lineTo(R - 3, -9);
+    ctx.lineTo(R - 3, 9);
+    ctx.closePath();
+    ctx.fillStyle = t.kind === 'key' ? t.color : g.theme.diamond;
+    ctx.fill();
+    ctx.restore();
+    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(0, 0, R, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = t.kind === 'key' ? t.color : g.theme.diamond;
+    ctx.stroke();
+    if (t.kind === 'key') drawKey(ctx, 0, 0, R * 1.5, t.color, -0.6);
+    else drawDiamond(ctx, 0, 1, R * 1.25, g.theme.diamond, g.time);
+    ctx.restore();
+  }
+}
+
 export function renderGame(g, ctx) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (g.staticLayer) ctx.drawImage(g.staticLayer, 0, 0);
+  if (g.bgLayer) ctx.drawImage(g.bgLayer, 0, 0);
   ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
-  drawHint(g, ctx);
+  ctx.save();
+  if (g.scrollMode) {
+    // labyrintti ei mene yläpalkin alle
+    ctx.beginPath();
+    ctx.rect(0, g.area.y - 6, g.vw, g.vh);
+    ctx.clip();
+  }
+  if (g.mazeLayer) {
+    const z = g.cell / g.layerCell, m = g.layerMargin;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(g.mazeLayer, g.ox - m * z, g.oy - m * z, g.layerSize.w * z, g.layerSize.h * z);
+  }
   drawItems(g, ctx);
   drawDiamondInRoom(g, ctx);
   drawDoor(g, ctx);
   drawActors(g, ctx);
+  ctx.restore();
   drawParticles(g, ctx);
+  drawIndicators(g, ctx);
   drawFlyers(g, ctx);
   drawHud(g, ctx);
   drawBanner(g, ctx);

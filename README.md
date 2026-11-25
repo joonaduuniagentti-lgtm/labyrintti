@@ -11,9 +11,11 @@ Peli on PWA eli verkkosivu, jonka voi asentaa puhelimen kotinäytölle. Asennett
 - **Napauta** lähellä olevaa ruutua, niin Leia kävelee sinne.
 - Tietokoneella toimivat nuolinäppäimet.
 
-Peliä ei voi hävitä: siinä ei ole aikarajaa eikä vihollisia. Jos Leia on jumissa noin 15 sekuntia, haamu vilkuttaa ja lattiaan ilmestyy kimallepolku seuraavalle avaimelle.
+Peliä ei voi hävitä: siinä ei ole aikarajaa eikä vihollisia. Jos avaimia ei löydy noin 15 sekuntiin, haamu vilkuttaa ja näyttää puhekuplassa, minkä värinen avain on seuraavaksi lähimpänä.
 
-Labyrintit luodaan automaattisesti, joten kenttiä riittää loputtomiin. Vaikeus kasvaa hitaasti: kentässä 1 on pieni labyrintti ja yksi avain, kentästä 10 eteenpäin neljä avainta. Maailma vaihtuu kolmen kentän välein. Maailmat ovat Kukkaniitty, Merenpohja, Karkkimaa, Lumimaa, Avaruus ja Kuulinna, ja jokaisessa haamulla on oma asu ja timantilla oma väri. Kerätyt timantit näkyvät aloitusnäytön aarrearkussa.
+Labyrintit luodaan automaattisesti, joten kenttiä riittää loputtomiin. Vaikeus kasvaa hitaasti: kentässä 1 on pieni labyrintti ja yksi avain, kentästä 10 eteenpäin neljä avainta.
+
+Kentät 1–12 näkyvät kokonaan ruudulla. Kentästä 13 alkaen labyrintti kasvaa puhelimen ruutua isommaksi (lopulta 17 × 27 ruutua, viisi avainta): kentän alussa näytetään koko labyrintti, sitten kamera zoomaa Leiaan ja seuraa häntä. Ruudun reunassa olevat osoittimet kertovat, mihin suuntaan näkymättömissä olevat avaimet ja lopuksi timantti ovat. Tabletilla iso labyrintti mahtuu yleensä kokonaan ruudulle. Maailma vaihtuu kolmen kentän välein. Maailmat ovat Kukkaniitty, Merenpohja, Karkkimaa, Lumimaa, Avaruus ja Kuulinna, ja jokaisessa haamulla on oma asu ja timantilla oma väri. Kerätyt timantit näkyvät aloitusnäytön aarrearkussa.
 
 ## Vanhemmille
 

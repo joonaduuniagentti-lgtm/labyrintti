@@ -3,7 +3,7 @@ import {
   createLevel, passable, inRoom, findPath, bfs, isDoorEdge, dirBetween,
   DIRS, DX, DY, OPP, N, E, S, W,
 } from './maze.js';
-import { levelParams, fitDims, MIN_CELL } from './levels.js';
+import { levelParams, fitDims, MIN_CELL, MIN_CELL_FIT_BIG } from './levels.js';
 import { themeForLevel } from './themes.js';
 import { buildStatic, renderGame, doorGeometry } from './render.js';
 import { randomSeed } from './rng.js';
@@ -71,12 +71,58 @@ export class Game {
 
   layoutMaze() {
     const L = this.level, A = this.area;
-    this.cell = Math.floor(Math.min(A.w / L.cols, A.h / L.rows));
-    this.wallW = Math.max(6, Math.round(this.cell * 0.2));
-    this.ox = Math.round(A.x + (A.w - L.cols * this.cell) / 2);
-    this.oy = Math.round(A.y + (A.h - L.rows * this.cell) / 2);
+    const fit = Math.min(A.w / L.cols, A.h / L.rows);
+    // Isoissa kentissä kamera seuraa Leiaa, jos koko labyrintti ei mahdu ruudulle selvästi
+    this.scrollMode = !!this.bigLevel && fit < MIN_CELL_FIT_BIG;
+    this.fitCell = Math.max(8, Math.floor(fit));
+    this.baseCell = this.scrollMode
+      ? Math.round(Math.max(42, Math.min(60, Math.min(A.w, A.h) / 8)))
+      : this.fitCell;
+    this.wallW = Math.max(6, Math.round(this.baseCell * 0.2));
+    if (!this.scrollMode) this.overview = null;
     this.layoutHud();
     buildStatic(this);
+    this.updateCamera(0, true);
+  }
+
+  // Kamera: pienissä kentissä labyrintti on keskellä, isoissa se seuraa Leiaa.
+  // Ison kentän alussa näytetään ensin koko labyrintti ja zoomataan sitten Leiaan.
+  updateCamera(dt, snap = false) {
+    const L = this.level, A = this.area, p = this.player;
+    if (!this.cam) this.cam = { x: L.cols / 2, y: L.rows / 2 };
+    let cell = this.baseCell;
+    if (this.scrollMode && p) {
+      let z = 1;
+      const ov = this.overview;
+      if (ov) {
+        z = ov.t < ov.hold ? 0 : Math.min(1, (ov.t - ov.hold) / ov.zoom);
+        z = z * z * (3 - 2 * z);
+      }
+      cell = this.fitCell + (this.baseCell - this.fitCell) * z;
+      const hx = A.w / (2 * cell), hy = A.h / (2 * cell);
+      const clampC = (v, n, h) => (n <= 2 * h ? n / 2 : Math.max(h, Math.min(n - h, v)));
+      const fx = clampC(p.px + 0.5, L.cols, hx), fy = clampC(p.py + 0.5, L.rows, hy);
+      if (ov || snap) {
+        this.cam.x = L.cols / 2 + (fx - L.cols / 2) * z;
+        this.cam.y = L.rows / 2 + (fy - L.rows / 2) * z;
+      } else {
+        const k = 1 - Math.exp(-dt * 6);
+        this.cam.x += (fx - this.cam.x) * k;
+        this.cam.y += (fy - this.cam.y) * k;
+      }
+    } else {
+      this.cam.x = L.cols / 2;
+      this.cam.y = L.rows / 2;
+    }
+    this.cell = cell;
+    const r = (v) => Math.round(v * this.dpr) / this.dpr;
+    this.ox = r(A.x + A.w / 2 - this.cam.x * cell);
+    this.oy = r(A.y + A.h / 2 - this.cam.y * cell);
+  }
+
+  skipOverview() {
+    const ov = this.overview;
+    if (ov && ov.t < ov.hold) ov.t = ov.hold;
   }
 
   layoutHud() {
@@ -115,6 +161,10 @@ export class Game {
     this.levelNum = n;
     this.theme = themeForLevel(n);
     const p = levelParams(n);
+    this.bigLevel = !!p.scroll;
+    this.cam = null;
+    this.overview = null;
+    this.player = null;
     const portrait = this.area.h >= this.area.w;
     const { cols, rows } = fitDims(p, portrait, this.area.w, this.area.h, MIN_CELL);
     this.level = createLevel({ cols, rows, keys: p.keys, braid: p.braid, coins: p.coins, seed: randomSeed() });
@@ -142,6 +192,10 @@ export class Game {
     this.finishT = 0;
     this.banner = { title: `Kenttä ${n}`, sub: this.theme.name, t: 0 };
     this.layoutMaze();
+    if (this.scrollMode) {
+      this.overview = { t: 0, hold: 1.8, zoom: 1.1 };
+      this.updateCamera(0, true);
+    }
     this.audio.startMusic(this.theme);
     this.audio.levelStart();
   }
@@ -157,6 +211,7 @@ export class Game {
   // ------------------------------------------------------------ syötteet
   inputDir(d) {
     if (!this.acceptsInput()) return;
+    this.skipOverview();
     const p = this.player;
     p.mode = 'slide';
     p.target = null;
@@ -188,6 +243,7 @@ export class Game {
 
   tapAt(px, py) {
     if (!this.acceptsInput()) return;
+    this.skipOverview();
     const p = this.player;
     const c = this.cellAt(px, py);
     if (c && !(c.x === p.x && c.y === p.y)) {
@@ -225,6 +281,7 @@ export class Game {
   // kulkee suoraan sormen suuntaan, kunnes seinä tulee vastaan.
   fingerHold(px, py) {
     if (!this.acceptsInput()) return;
+    this.skipOverview();
     const p = this.player;
     this.finger = { x: px, y: py };
     this.fingerBlocked = null;
@@ -441,7 +498,10 @@ export class Game {
       this.ghostMood('happy', 1.5);
       this.ghostSay('heart', 1.4);
       this.flyers.push({
-        kind: 'key', color: k.color, from: { ...pos }, to: () => doorGeometry(this).holes[i], t: 0, dur: 1.0, arc: this.cell * 1.2,
+        // Isossa kentässä ovi voi olla ruudun ulkopuolella: avain lentää silloin yläpalkkiin
+        kind: 'key', color: k.color, from: { ...pos },
+        to: () => (this.scrollMode ? this.hud.slots[i] : doorGeometry(this).holes[i]),
+        t: 0, dur: 1.0, arc: this.cell * 1.2,
         onArrive: () => this.insertKey(i),
       });
     });
@@ -568,21 +628,21 @@ export class Game {
     return { x: L.diamond.x, y: L.diamond.y, kind: 'diamond' };
   }
 
+  // Jos avaimia ei löydy hetkeen, haamu vilkuttaa ja näyttää kuplassa, mitä etsiä.
+  // Isoissa kentissä myös reunan osoitin sykkii.
   updateHint(dt) {
     if (this.hint) {
       this.hint.t += dt;
       if (this.hint.t > this.hint.dur) this.hint = null;
     }
-    if (this.state !== 'play' || this.hint || this.time < this.nextHintAt) return;
+    if (this.state !== 'play' || this.hint || this.overview || this.time < this.nextHintAt) return;
     const target = this.hintTarget();
-    const p = this.player;
-    const path = target && findPath(this.level, { x: p.x, y: p.y }, target);
-    if (!path || path.length < 2) {
+    if (!target) {
       this.nextHintAt = this.time + 3;
       return;
     }
-    this.hint = { path, t: 0, dur: 5 };
-    this.nextHintAt = this.time + 5 + HINT_REPEAT;
+    this.hint = { target, t: 0, dur: 3 };
+    this.nextHintAt = this.time + 3 + HINT_REPEAT;
     this.audio.hint();
     this.ghostMood('wave', 2.5);
     this.ghostSay(target.kind, 2.5, target.color);
@@ -652,7 +712,12 @@ export class Game {
       this.timers = this.timers.filter((t) => t.at > this.time);
       for (const t of due) t.fn();
     }
+    if (this.overview) {
+      this.overview.t += dt;
+      if (this.overview.t >= this.overview.hold + this.overview.zoom) this.overview = null;
+    }
     this.updatePlayer(dt);
+    this.updateCamera(dt);
     this.updateGhost(dt);
     if (this.door.opening && this.door.openT < 1) this.door.openT = Math.min(1, this.door.openT + dt / 0.8);
     if (this.door.shake > 0) this.door.shake = Math.max(0, this.door.shake - dt);

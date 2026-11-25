@@ -1,6 +1,6 @@
 // Service worker: tallentaa pelin laitteelle, jotta se toimii ilman nettiä.
 // Kun muutat pelin tiedostoja, kasvata VERSION-numeroa, niin puhelimet hakevat uuden version.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `labyrintti-${VERSION}`;
 const FILES = [
   './',

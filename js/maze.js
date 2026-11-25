@@ -7,8 +7,8 @@ export const DX = { 1: 0, 2: 1, 4: 0, 8: -1 };
 export const DY = { 1: -1, 2: 0, 4: 1, 8: 0 };
 export const OPP = { 1: 4, 2: 8, 4: 1, 8: 2 };
 
-// Avainten värit: punainen, keltainen, sininen, vihreä
-export const KEY_COLORS = ['#ff4d6d', '#ffbe0b', '#3a86ff', '#2ec27e'];
+// Avainten värit: punainen, keltainen, sininen, vihreä, violetti
+export const KEY_COLORS = ['#ff4d6d', '#ffbe0b', '#3a86ff', '#2ec27e', '#9b5de5'];
 
 const bitCount = (v) => (v & 1) + ((v >> 1) & 1) + ((v >> 2) & 1) + ((v >> 3) & 1);
 
