@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head><meta charset="utf-8"><title>Ikonit</title></head>
+<body style="background:#ddd">
+<!-- Kehitystyökalu: piirtää sovelluksen ikonit pelin omilla piirtofunktioilla.
+     Aja: node tools/make-icons.mjs (käynnistää paikallisen palvelimen ja tallentaa PNG:t). -->
+<canvas id="c"></canvas>
+<script type="module">
+  import { drawLeia, drawGhost, drawDiamond, roundRectPath } from '../js/sprites.js';
+
+  function drawIcon(N, { rounded = false } = {}) {
+    const c = document.getElementById('c');
+    c.width = N; c.height = N;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, N, N);
+    if (rounded) { roundRectPath(ctx, 0, 0, N, N, N * 0.22); ctx.clip(); }
+    const g = ctx.createLinearGradient(0, 0, 0, N);
+    g.addColorStop(0, '#d4f8bf');
+    g.addColorStop(1, '#7fcf68');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, N, N);
+    // labyrintin seiniä taustalla
+    ctx.lineCap = 'round';
+    const lines = [
+      [0.08, 0.2, 0.3, 0.2], [0.3, 0.2, 0.3, 0.08], [0.7, 0.08, 0.7, 0.22], [0.7, 0.22, 0.92, 0.22],
+      [0.08, 0.8, 0.26, 0.8], [0.26, 0.8, 0.26, 0.92], [0.92, 0.6, 0.78, 0.6], [0.08, 0.45, 0.16, 0.45],
+      [0.6, 0.92, 0.6, 0.84],
+    ];
+    for (const [col, off] of [['#2a6b33', 0.012], ['#3f9b4b', 0]]) {
+      ctx.beginPath();
+      for (const [x1, y1, x2, y2] of lines) { ctx.moveTo(x1 * N, (y1 + off) * N); ctx.lineTo(x2 * N, (y2 + off) * N); }
+      ctx.strokeStyle = col;
+      ctx.lineWidth = N * 0.05;
+      ctx.stroke();
+    }
+    const glow = ctx.createRadialGradient(N * 0.5, N * 0.52, 0, N * 0.5, N * 0.52, N * 0.42);
+    glow.addColorStop(0, 'rgba(255,255,255,0.75)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, N, N);
+    drawGhost(ctx, N * 0.66, N * 0.4, N * 0.3, { t: 0.3, mood: 'happy', lookX: -1 });
+    drawDiamond(ctx, N * 0.67, N * 0.68, N * 0.17, '#3fb8ff', 0.5);
+    drawLeia(ctx, N * 0.38, N * 0.53, N * 0.48, { t: 0.5, facing: 'right', happy: true, noShadow: false });
+    return c.toDataURL('image/png');
+  }
+  window.drawIcon = drawIcon;
+  window.iconReady = true;
+</script>
+</body>
+</html>

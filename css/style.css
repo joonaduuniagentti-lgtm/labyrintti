@@ -1,0 +1,291 @@
+:root {
+  --bg1: #c8f5b0;
+  --bg2: #86d46f;
+  --ink: #3d2f7a;
+  --font: ui-rounded, "SF Pro Rounded", "Nunito", "Arial Rounded MT Bold", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --st: env(safe-area-inset-top, 0px);
+  --sr: env(safe-area-inset-right, 0px);
+  --sb: env(safe-area-inset-bottom, 0px);
+  --sl: env(safe-area-inset-left, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(var(--bg1), var(--bg2));
+  font-family: var(--font);
+  color: var(--ink);
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas#game {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: block;
+  touch-action: none;
+}
+
+#safe-probe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  padding: var(--st) var(--sr) var(--sb) var(--sl);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.hidden { display: none !important; }
+
+button {
+  font-family: inherit;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---------------------------------------------------------------- pyöreät napit */
+.round-btn {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  color: #5b4bb5;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12), 0 6px 14px rgba(0, 0, 0, 0.15);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.round-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); }
+.round-btn svg { width: 30px; height: 30px; }
+
+.hud-left, .hud-right, .corner-left, .corner-right { position: fixed; z-index: 5; }
+.hud-left, .corner-left { left: calc(var(--sl) + 10px); top: calc(var(--st) + 6px); }
+.hud-right, .corner-right { right: calc(var(--sr) + 10px); top: calc(var(--st) + 6px); }
+
+.parent-btn { color: #8d86b0; background: rgba(255, 255, 255, 0.6); }
+.parent-btn svg:first-child { width: 24px; height: 24px; }
+.parent-btn .ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.parent-btn .ring circle {
+  fill: none;
+  stroke: #5b4bb5;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 138.2;
+  stroke-dashoffset: 138.2;
+  transition: stroke-dashoffset 0.15s linear;
+}
+.parent-btn.holding .ring circle { stroke-dashoffset: 0; transition: stroke-dashoffset 2s linear; }
+
+/* ---------------------------------------------------------------- isot napit */
+.big-btn {
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: linear-gradient(#ffd75e, #ffad0a);
+  color: #ffffff;
+  box-shadow: 0 9px 0 #d98200, 0 16px 26px rgba(0, 0, 0, 0.25);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.big-btn svg { width: 62px; height: 62px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.15)); margin-left: 6px; }
+.big-btn:active { transform: translateY(7px); box-shadow: 0 2px 0 #d98200, 0 6px 12px rgba(0, 0, 0, 0.2); }
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.07; }
+}
+
+/* ---------------------------------------------------------------- näytöt */
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: calc(var(--st) + 16px) calc(var(--sr) + 16px) calc(var(--sb) + 16px) calc(var(--sl) + 16px);
+  background: linear-gradient(var(--bg1), var(--bg2));
+}
+.screen.overlay { background: rgba(30, 20, 70, 0.35); z-index: 20; }
+
+.title {
+  margin: 0;
+  font-size: clamp(42px, 12vw, 72px);
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffffff;
+  text-shadow: 0 4px 0 #5b4bb5, 0 8px 18px rgba(0, 0, 0, 0.25);
+  -webkit-text-stroke: 2px #5b4bb5;
+}
+.title.small { font-size: clamp(34px, 9vw, 52px); margin-top: 52px; }
+
+#start-art { width: min(88vw, 460px); aspect-ratio: 2 / 1; }
+
+.start-row { display: flex; gap: 14px; margin-top: 8px; }
+.chip-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12), 0 6px 14px rgba(0, 0, 0, 0.15);
+  font-size: 26px;
+  font-weight: 900;
+  color: #5b4bb5;
+}
+.chip-btn canvas { width: 44px; height: 44px; }
+.chip-btn:active { transform: translateY(3px); }
+
+.level-label {
+  font-weight: 800;
+  font-size: 17px;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------- aarteet */
+#screen-treasure { justify-content: flex-start; }
+.treasure-stats {
+  display: flex;
+  gap: 18px;
+  font-size: 24px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+.treasure-stats span { display: inline-flex; align-items: center; gap: 6px; }
+.treasure-stats canvas { width: 34px; height: 34px; }
+#treasure-grid {
+  flex: 1;
+  width: min(100%, 560px);
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 10px;
+  align-content: start;
+  padding: 10px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.gem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #5b4bb5;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 18px;
+  padding: 6px 4px 4px;
+}
+.gem canvas { width: 56px; height: 56px; }
+.empty-note {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: #5b4bb5;
+  padding: 24px 8px;
+}
+
+/* ---------------------------------------------------------------- läpäisy */
+.celebrate-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 28px;
+  border-radius: 36px;
+  background: linear-gradient(#ffffff, #fff3fa);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  animation: pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+#celebrate-art { width: min(80vw, 400px); aspect-ratio: 4 / 3; }
+.coin-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: min(80vw, 400px); min-height: 26px; }
+.coin-row i {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6b0, #ffd23f 50%, #f0a500);
+  border: 3px solid #c98a00;
+  animation: pop 0.3s both;
+}
+
+/* ---------------------------------------------------------------- vanhemmat */
+.panel {
+  width: min(92vw, 380px);
+  max-height: calc(100% - 20px);
+  overflow-y: auto;
+  touch-action: pan-y;
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 20px 20px 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  user-select: none;
+}
+.panel h2 { margin: 0 0 4px; font-size: 24px; }
+.panel .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 800; font-size: 18px; }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper span { min-width: 40px; text-align: center; font-size: 24px; }
+.text-btn {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #efeaff;
+  font-weight: 800;
+  font-size: 17px;
+  color: #3d2f7a;
+}
+.stepper .text-btn { width: 48px; height: 48px; padding: 0; font-size: 26px; }
+.text-btn.primary { background: #5b4bb5; color: #ffffff; }
+.text-btn.danger { background: #ffe3e8; color: #b3123b; }
+.text-btn:active { filter: brightness(0.92); }
+.toggle { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 17px; padding: 4px 2px; }
+.toggle input { width: 26px; height: 26px; accent-color: #5b4bb5; }
+.confirm { background: #fff5f7; border-radius: 16px; padding: 10px 12px; }
+.confirm p { margin: 0 0 10px; font-weight: 700; }
+.muted { color: #7a6bb5; margin: 0; font-weight: 600; }
+.muted.small { font-size: 13px; line-height: 1.4; }
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .screen { flex-direction: row; flex-wrap: wrap; gap: 10px 24px; }
+  .title { font-size: 44px; width: 100%; text-align: center; }
+  #start-art { width: min(46vw, 340px); }
+  .start-row { margin-top: 0; }
+  #screen-treasure { flex-direction: column; flex-wrap: nowrap; }
+  .title.small { margin-top: 0; }
+  #celebrate-art { width: min(44vw, 280px); }
+  .celebrate-card { flex-direction: row; flex-wrap: wrap; justify-content: center; padding: 12px; }
+}
