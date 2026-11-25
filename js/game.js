@@ -165,9 +165,9 @@ export class Game {
   }
 
   // ------------------------------------------------------------ kentän aloitus
-  startLevel(n) {
+  startLevel(n, theme = null) {
     this.levelNum = n;
-    this.theme = themeForLevel(n);
+    this.theme = theme || themeForLevel(n);
     const p = levelParams(n);
     this.bigLevel = !!p.scroll;
     this.cam = null;

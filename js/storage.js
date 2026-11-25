@@ -8,6 +8,7 @@ const DEFAULTS = () => ({
   diamonds: [],    // [{ level, theme }]
   sound: true,
   music: true,
+  cap: null,       // vaikein kenttä (null = ei rajaa); säilyy myös uudelleenkäynnistyksessä
 });
 
 export class Store {
@@ -27,8 +28,8 @@ export class Store {
   }
 
   resetProgress() {
-    const { sound, music } = this.data;
-    this.data = { ...DEFAULTS(), sound, music };
+    const { sound, music, cap } = this.data;
+    this.data = { ...DEFAULTS(), sound, music, cap };
     this.save();
   }
 }

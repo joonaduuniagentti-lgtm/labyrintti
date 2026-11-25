@@ -260,6 +260,9 @@ button {
 .panel .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 800; font-size: 18px; }
 .stepper { display: flex; align-items: center; gap: 10px; }
 .stepper span { min-width: 40px; text-align: center; font-size: 24px; }
+.stepper span.wide { font-size: 16px; min-width: 64px; }
+.panel .row { flex-wrap: wrap; }
+.text-btn:disabled { opacity: 0.4; }
 .text-btn {
   padding: 12px 16px;
   border-radius: 14px;

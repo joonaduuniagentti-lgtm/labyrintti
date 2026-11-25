@@ -24,6 +24,7 @@ Peli alkaa aina kentästä 1, kun se avataan uudelleen. Kerätyt timantit ja kol
 Pidä **ratasnappia** (oikea yläkulma) pohjassa kaksi sekuntia. Valikossa voi:
 
 - valita jo avatun kentän,
+- asettaa **vaikeimman kentän** (esim. 12): kun se on läpäisty, peli tekee loputtomasti uusia samantasoisia kenttiä eikä vaikeudu enempää. Maailma vaihtuu silti joka kerta. Asetus säilyy, vaikka sovelluksen sulkee,
 - laittaa äänet ja taustamusiikin päälle tai pois,
 - aloittaa alusta (nollaa kentät, timantit ja kolikot).
 

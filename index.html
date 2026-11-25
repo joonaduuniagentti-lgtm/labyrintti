@@ -86,6 +86,15 @@
       <p class="muted" id="lvl-world"></p>
       <p class="muted small">Peli alkaa aina kentästä 1, kun se avataan uudelleen. Timantit ja kolikot säilyvät.</p>
       <button id="btn-play-level" class="text-btn primary">Pelaa tätä kenttää</button>
+      <div class="row">
+        <span>Vaikein kenttä</span>
+        <div class="stepper">
+          <button id="cap-minus" class="text-btn" aria-label="Laske vaikeinta kenttää">−</button>
+          <span id="cap-value">Ei rajaa</span>
+          <button id="cap-plus" class="text-btn" aria-label="Nosta vaikeinta kenttää">+</button>
+        </div>
+      </div>
+      <p class="muted small" id="cap-info"></p>
       <label class="toggle"><input type="checkbox" id="opt-sound"><span>Äänet</span></label>
       <label class="toggle"><input type="checkbox" id="opt-music"><span>Taustamusiikki</span></label>
       <button id="btn-reset" class="text-btn danger">Aloita alusta…</button>

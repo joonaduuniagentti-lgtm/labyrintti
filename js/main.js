@@ -3,7 +3,7 @@ import { Store } from './storage.js';
 import { AudioEngine } from './audio.js';
 import { Game } from './game.js';
 import { attachInput } from './input.js';
-import { themeForLevel, themeById } from './themes.js';
+import { THEMES, themeForLevel, themeIndexForLevel, themeById } from './themes.js';
 import { drawLeia, drawGhost, drawDiamond, drawCoin, drawSparkle } from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +27,24 @@ attachInput(canvas, game);
 let base = 'start'; // start | game | treasure | celebrate
 let parentOpen = false;
 let parentLevel = 1;
+
+// ---------------------------------------------------------------- vaikein kenttä
+// Kun vaikein kenttä on läpäisty, peli tekee uusia samantasoisia kenttiä.
+// Maailma vaihtuu silti joka kerta, jotta kentät näyttävät erilaisilta.
+const CAP_MAX = 20;
+let capRepeat = 0;
+const capOf = () => {
+  const c = store.data.cap;
+  return Number.isInteger(c) && c >= 1 ? Math.min(c, CAP_MAX) : null;
+};
+function themeFor(n) {
+  const cap = capOf();
+  if (cap && n === cap && capRepeat > 0) return THEMES[(themeIndexForLevel(n) + capRepeat) % THEMES.length];
+  return themeForLevel(n);
+}
+function startLevel(n) {
+  game.startLevel(n, themeFor(n));
+}
 
 // ---------------------------------------------------------------- näyttöjen vaihto
 function refresh() {
@@ -55,7 +73,7 @@ function setBase(b) {
 }
 
 function applyThemeColors() {
-  const T = base === 'game' || base === 'celebrate' ? game.theme || themeForLevel(store.data.level) : themeForLevel(store.data.level);
+  const T = base === 'game' || base === 'celebrate' ? game.theme || themeFor(store.data.level) : themeFor(store.data.level);
   document.documentElement.style.setProperty('--bg1', T.bg[0]);
   document.documentElement.style.setProperty('--bg2', T.bg[1]);
   const meta = document.querySelector('meta[name="theme-color"]');
@@ -63,7 +81,7 @@ function applyThemeColors() {
 }
 
 function renderStart() {
-  const T = themeForLevel(store.data.level);
+  const T = themeFor(store.data.level);
   $('start-level').textContent = `Kenttä ${store.data.level} · ${T.name}`;
   $('diamond-count').textContent = String(store.data.diamonds.length);
   const chip = $('chip-diamond');
@@ -78,7 +96,7 @@ function playCurrent() {
   if (game.level && game.state === 'play' && game.levelNum === lvl) {
     audio.startMusic(game.theme);
   } else {
-    game.startLevel(lvl);
+    startLevel(lvl);
   }
   setBase('game');
 }
@@ -86,8 +104,12 @@ function playCurrent() {
 function onLevelComplete({ level, coins, theme }) {
   store.data.coins += coins;
   store.data.diamonds.push({ level, theme: theme.id });
-  store.data.level = level + 1;
-  store.data.maxLevel = Math.max(store.data.maxLevel, level + 1);
+  const cap = capOf();
+  const atCap = cap && level >= cap;
+  const next = atCap ? cap : level + 1;
+  capRepeat = atCap ? capRepeat + 1 : 0;
+  store.data.level = next;
+  store.data.maxLevel = Math.max(store.data.maxLevel, next);
   store.save();
   const row = $('celebrate-coins');
   row.innerHTML = '';
@@ -117,7 +139,7 @@ $('btn-home').addEventListener('click', () => {
 
 $('btn-next').addEventListener('click', () => {
   audio.tap();
-  game.startLevel(store.data.level);
+  startLevel(store.data.level);
   setBase('game');
 });
 
@@ -196,11 +218,12 @@ function setupLongPress(btn, ms, cb) {
 function openParent() {
   audio.unlock();
   parentOpen = true;
-  parentLevel = Math.min(store.data.level, store.data.maxLevel);
+  parentLevel = Math.min(store.data.level, maxSelectable());
   $('opt-sound').checked = !!store.data.sound;
   $('opt-music').checked = !!store.data.music;
   $('reset-confirm').classList.add('hidden');
   updateParentLevel();
+  updateCap();
   refresh();
 }
 
@@ -209,22 +232,58 @@ function closeParent() {
   refresh();
 }
 
+const maxSelectable = () => {
+  const cap = capOf();
+  return Math.max(1, cap ? Math.min(store.data.maxLevel, cap) : store.data.maxLevel);
+};
+
 function updateParentLevel() {
+  parentLevel = Math.min(parentLevel, maxSelectable());
   $('lvl-value').textContent = String(parentLevel);
   $('lvl-world').textContent = `${themeForLevel(parentLevel).name} · avattuja kenttiä ${store.data.maxLevel}`;
   $('lvl-minus').disabled = parentLevel <= 1;
-  $('lvl-plus').disabled = parentLevel >= store.data.maxLevel;
+  $('lvl-plus').disabled = parentLevel >= maxSelectable();
+}
+
+function updateCap() {
+  const cap = capOf();
+  $('cap-value').textContent = cap ? String(cap) : 'Ei rajaa';
+  $('cap-value').classList.toggle('wide', !cap);
+  $('cap-minus').disabled = cap === 1;
+  $('cap-plus').disabled = !cap;
+  $('cap-info').textContent = cap
+    ? `Kentän ${cap} jälkeen peli tekee uusia samantasoisia kenttiä eikä vaikeudu enempää.${cap >= 13 ? ' Kentästä 13 alkaen labyrintti on puhelimen ruutua isompi.' : ''}`
+    : 'Peli vaikeutuu kentästä toiseen. Vaikeimmillaan se on kentästä 20 eteenpäin.';
+}
+
+function setCap(cap) {
+  store.data.cap = cap;
+  if (cap && store.data.level > cap) store.data.level = cap;
+  capRepeat = 0;
+  store.save();
+  updateCap();
+  updateParentLevel();
 }
 
 document.querySelectorAll('.parent-btn').forEach((b) => setupLongPress(b, 2000, openParent));
 $('btn-parent-close').addEventListener('click', closeParent);
 $('lvl-minus').addEventListener('click', () => { parentLevel = Math.max(1, parentLevel - 1); updateParentLevel(); });
-$('lvl-plus').addEventListener('click', () => { parentLevel = Math.min(store.data.maxLevel, parentLevel + 1); updateParentLevel(); });
+$('lvl-plus').addEventListener('click', () => { parentLevel = Math.min(maxSelectable(), parentLevel + 1); updateParentLevel(); });
+$('cap-minus').addEventListener('click', () => {
+  const cap = capOf();
+  setCap(cap ? Math.max(1, cap - 1) : CAP_MAX);
+});
+$('cap-plus').addEventListener('click', () => {
+  const cap = capOf();
+  if (!cap) return;
+  setCap(cap >= CAP_MAX ? null : cap + 1);
+});
 $('btn-play-level').addEventListener('click', () => {
   store.data.level = parentLevel;
   store.save();
   parentOpen = false;
-  game.startLevel(parentLevel);
+  capRepeat = 0;
+  startLevel(parentLevel);
   setBase('game');
 });
 $('opt-sound').addEventListener('change', (e) => audio.setSound(e.target.checked));
@@ -263,7 +322,7 @@ function drawStartArt(dt) {
   const { ctx, w, h } = fitCanvas($('start-art'));
   if (!w) return;
   ctx.clearRect(0, 0, w, h);
-  const T = themeForLevel(store.data.level);
+  const T = themeFor(store.data.level);
   const s = Math.min(h * 0.82, w * 0.32);
   const gy = h * 0.55;
   ctx.save();
