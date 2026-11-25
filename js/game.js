@@ -12,7 +12,7 @@ const SPEED = 5.2;          // ruutua sekunnissa
 const HUD_H = 64;           // yläpalkin korkeus
 const HINT_DELAY = 16;      // sekuntia ilman edistystä ennen vinkkiä
 const HINT_REPEAT = 10;     // vinkki uudestaan, jos jumi jatkuu
-const QUEUE_TTL = 1.0;      // kauanko etukäteen annettu suunta muistetaan
+const LINK = 2;             // kuinka kaukaa (askelta) sormi voi jatkaa Leian reittiä
 
 const FACING = { [N]: 'up', [S]: 'down', [E]: 'right', [W]: 'left' };
 const CONFETTI = ['#ff4d6d', '#ffbe0b', '#3a86ff', '#2ec27e', '#ff5fa2', '#9b5de5', '#ffffff'];
@@ -106,9 +106,17 @@ export class Game {
         this.cam.x = L.cols / 2 + (fx - L.cols / 2) * z;
         this.cam.y = L.rows / 2 + (fy - L.rows / 2) * z;
       } else {
-        const k = 1 - Math.exp(-dt * 6);
-        this.cam.x += (fx - this.cam.x) * k;
-        this.cam.y += (fy - this.cam.y) * k;
+        // Kamera liikkuu vasta, kun Leia lähestyy näkymän reunaa (rauhallisempi kuva,
+        // eikä paikallaan pidetty sormi "liu'u" labyrintissa Leian mukana)
+        const lx = p.px + 0.5, ly = p.py + 0.5, dzx = hx * 0.4, dzy = hy * 0.4;
+        let tx = this.cam.x, ty = this.cam.y;
+        if (lx - tx > dzx) tx = lx - dzx; else if (tx - lx > dzx) tx = lx + dzx;
+        if (ly - ty > dzy) ty = ly - dzy; else if (ty - ly > dzy) ty = ly + dzy;
+        tx = clampC(tx, L.cols, hx);
+        ty = clampC(ty, L.rows, hy);
+        const k = 1 - Math.exp(-dt * 5);
+        this.cam.x += (tx - this.cam.x) * k;
+        this.cam.y += (ty - this.cam.y) * k;
       }
     } else {
       this.cam.x = L.cols / 2;
@@ -171,10 +179,11 @@ export class Game {
     const L = this.level;
     this.player = {
       x: L.start.x, y: L.start.y, px: L.start.x, py: L.start.y,
-      from: null, to: null, t: 0, dir: null, moving: false,
-      heading: null, queued: null, queuedAt: 0, facing: 'down',
-      mode: 'slide', target: null, followMax: 6, auto: false, bump: null, walkT: 0, jump: 0, happy: false,
+      from: null, to: null, t: 0, dir: null, moving: false, facing: 'down',
+      bump: null, walkT: 0, jump: 0, happy: false,
     };
+    this.trail = [];
+    this.autoWalk = false;
     this.ghost = { x: L.ghost.x, y: L.ghost.y, mood: 'idle', moodUntil: 0, bubble: null, bubbleUntil: 0, bubbleAt: 0, bubbleColor: null };
     this.keyholes = L.keys.map((k) => ({ color: k.color, filled: false, filledAt: 0, flash: 0 }));
     this.keysInserted = 0;
@@ -186,8 +195,8 @@ export class Game {
     this.hint = null;
     this.lastProgress = this.time;
     this.nextHintAt = this.time + HINT_DELAY;
-    this.finger = null;
-    this.fingerBlocked = null;
+    this.fingerActive = false;
+    this.fingerPrev = null;
     this.state = 'play';
     this.finishT = 0;
     this.banner = { title: `Kenttä ${n}`, sub: this.theme.name, t: 0 };
@@ -209,62 +218,133 @@ export class Game {
   }
 
   // ------------------------------------------------------------ syötteet
-  inputDir(d) {
-    if (!this.acceptsInput()) return;
-    this.skipOverview();
-    const p = this.player;
-    p.mode = 'slide';
-    p.target = null;
-    if (p.moving) {
-      if (d === OPP[p.dir]) {
-        const f = p.from;
-        p.from = p.to;
-        p.to = f;
-        p.t = 1 - p.t;
-        p.x = p.from.x;
-        p.y = p.from.y;
-        p.dir = d;
-        p.heading = d;
-        p.facing = FACING[d];
-        p.queued = null;
-        return;
-      }
-      p.queued = d;
-      p.queuedAt = this.time;
-      return;
-    }
-    if (passable(this.level, p.x, p.y, d)) {
-      p.heading = d;
-      this.beginStep(d);
-    } else {
-      this.bumpInto(d);
-    }
-  }
-
-  tapAt(px, py) {
+  // Leiaa ohjataan piirtämällä reittiä sormella: Leia kulkee täsmälleen ne ruudut,
+  // joiden kautta sormi kulkee. Sormen pitää olla Leian luona tai aivan vieressä
+  // (enintään LINK askeleen päässä), jotta Leia lähtee liikkeelle. Kaukaa painaminen
+  // ei liikuta Leiaa, eikä hän koskaan kävele itsestään pidemmälle kuin sormi.
+  fingerDown(px, py) {
     if (!this.acceptsInput()) return;
     this.skipOverview();
     const p = this.player;
     const c = this.cellAt(px, py);
-    if (c && !(c.x === p.x && c.y === p.y)) {
-      const from = p.moving ? p.to : p;
-      const path = findPath(this.level, { x: from.x, y: from.y }, c, 4);
-      if (path) {
-        p.mode = 'follow';
-        p.target = c;
-        p.followMax = 5;
-        p.queued = null;
-        if (!p.moving) this.stepFollow();
-        return;
-      }
-    }
-    const pc = this.cellCenter(p.px, p.py);
-    const dx = px - pc.x, dy = py - pc.y;
-    if (Math.hypot(dx, dy) < this.cell * 0.45) {
-      this.tapPlayer();
+    this.fingerActive = true;
+    this.fingerPrev = null;
+    this.fingerOnLeia = !!c && c.x === p.x && c.y === p.y && !p.moving;
+    this.fingerMoved = false;
+    this.fingerDownAt = this.time;
+    this.fingerLinked = this.fingerOnLeia;
+    if (c) this.fingerTo(c);
+  }
+
+  fingerMoveTo(px, py) {
+    if (!this.fingerActive || !this.acceptsInput()) return;
+    const c = this.cellAt(px, py);
+    if (c) this.fingerTo(c);
+  }
+
+  fingerUp() {
+    if (!this.fingerActive) return;
+    this.fingerActive = false;
+    if (this.fingerOnLeia && !this.fingerMoved) this.tapPlayer();
+  }
+
+  fingerTo(c) {
+    const prev = this.fingerPrev;
+    if (prev && prev.x === c.x && prev.y === c.y) return;
+    if (prev) this.fingerMoved = true;
+    this.fingerPrev = c;
+    this.extendTrail(c);
+  }
+
+  // Seuraava ruutu, johon Leia on menossa tai jossa hän on, kun reittiä ei ole jäljellä
+  trailEnd() {
+    const p = this.player;
+    if (this.trail.length) return this.trail[this.trail.length - 1];
+    return p.moving ? p.to : { x: p.x, y: p.y };
+  }
+
+  extendTrail(c) {
+    const p = this.player, L = this.level;
+    if (this.autoWalk) return;
+    // Sormi palasi jo piirretylle reitille: lyhennetään reitti siihen
+    const idx = this.trail.findIndex((t) => t.x === c.x && t.y === c.y);
+    if (idx >= 0) {
+      this.trail.length = idx + 1;
       return;
     }
-    this.inputDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? E : W) : (dy > 0 ? S : N));
+    // Sormi palasi ruutuun, josta Leia juuri lähti: käännytään heti
+    if (p.moving && !this.trail.length && c.x === p.from.x && c.y === p.from.y) {
+      this.reverseStep();
+      return;
+    }
+    const end = this.trailEnd();
+    if (end.x === c.x && end.y === c.y) {
+      this.trail.length = 0;
+      return;
+    }
+    const path = findPath(L, end, c, LINK);
+    if (path && path.length > 1) {
+      this.fingerLinked = true;
+      for (const q of path.slice(1)) this.trail.push(q);
+      if (!p.moving) this.stepTrail();
+      return;
+    }
+    // Seinä välissä: pieni tönäisy, jotta näkee ettei siitä pääse
+    if (Math.abs(c.x - end.x) + Math.abs(c.y - end.y) === 1 && !p.moving && !this.trail.length) {
+      this.bumpInto(dirBetween(end, c));
+    }
+  }
+
+  reverseStep() {
+    const p = this.player;
+    const f = p.from;
+    p.from = p.to;
+    p.to = f;
+    p.t = 1 - p.t;
+    p.x = p.from.x;
+    p.y = p.from.y;
+    p.dir = OPP[p.dir];
+    p.facing = FACING[p.dir];
+  }
+
+  // Seuraava askel piirrettyä reittiä pitkin
+  nextTrailDir() {
+    const p = this.player, L = this.level;
+    while (this.trail.length) {
+      const n = this.trail[0];
+      if (n.x === p.x && n.y === p.y) {
+        this.trail.shift();
+        continue;
+      }
+      const d = dirBetween(p, n);
+      if (Math.abs(n.x - p.x) + Math.abs(n.y - p.y) !== 1 || !passable(L, p.x, p.y, d)) {
+        this.trail.length = 0;
+        return null;
+      }
+      this.trail.shift();
+      return d;
+    }
+    if (this.autoWalk) this.autoWalk = false;
+    return null;
+  }
+
+  stepTrail() {
+    const d = this.nextTrailDir();
+    if (d != null) this.beginStep(d);
+  }
+
+  // Näppäimistö: yksi askel painallusta kohti
+  inputDir(d) {
+    if (!this.acceptsInput() || this.autoWalk) return;
+    this.skipOverview();
+    if (this.trail.length) return;
+    const p = this.player, end = this.trailEnd();
+    if (passable(this.level, end.x, end.y, d)) {
+      this.trail.push({ x: end.x + DX[d], y: end.y + DY[d] });
+      if (!p.moving) this.stepTrail();
+    } else if (!p.moving) {
+      this.bumpInto(d);
+    }
   }
 
   tapPlayer() {
@@ -273,74 +353,6 @@ export class Game {
     if (!p.moving && !p.hopT) {
       p.hopT = 0.0001;
       this.audio.hop();
-    }
-  }
-
-  // Sormi pohjassa: Leia kävelee sormea kohti niin kauan kuin sormi on ruudulla.
-  // Lähellä (muutaman askeleen päässä) hän osaa kiertää mutkat, kauempana hän
-  // kulkee suoraan sormen suuntaan, kunnes seinä tulee vastaan.
-  fingerHold(px, py) {
-    if (!this.acceptsInput()) return;
-    this.skipOverview();
-    const p = this.player;
-    this.finger = { x: px, y: py };
-    this.fingerBlocked = null;
-    if (p.auto) return;
-    p.mode = 'finger';
-    p.target = null;
-    p.queued = null;
-    if (!p.moving) this.stepFinger();
-  }
-
-  fingerMove(px, py) {
-    if (!this.finger) return;
-    this.finger.x = px;
-    this.finger.y = py;
-  }
-
-  fingerRelease() {
-    this.finger = null;
-    this.fingerBlocked = null;
-  }
-
-  fingerCell() {
-    const L = this.level, f = this.finger;
-    const x = Math.floor((f.x - this.ox) / this.cell), y = Math.floor((f.y - this.oy) / this.cell);
-    return { x: Math.max(0, Math.min(L.cols - 1, x)), y: Math.max(0, Math.min(L.rows - 1, y)) };
-  }
-
-  nextFingerDir() {
-    const p = this.player, L = this.level;
-    if (!this.finger) return null;
-    const c = this.fingerCell();
-    if (c.x === p.x && c.y === p.y) return null;
-    const path = findPath(L, { x: p.x, y: p.y }, c, 6);
-    if (path && path.length > 1) {
-      this.fingerBlocked = null;
-      return dirBetween(path[0], path[1]);
-    }
-    const pc = this.cellCenter(p.x, p.y);
-    const dx = (this.finger.x - pc.x) / this.cell, dy = (this.finger.y - pc.y) / this.cell;
-    const horiz = Math.abs(dx) > Math.abs(dy);
-    const primary = horiz ? (dx > 0 ? E : W) : (dy > 0 ? S : N);
-    const minor = horiz ? dy : dx;
-    const secondary = Math.abs(minor) > 0.5 ? (horiz ? (dy > 0 ? S : N) : (dx > 0 ? E : W)) : null;
-    if (passable(L, p.x, p.y, primary)) { this.fingerBlocked = null; return primary; }
-    if (secondary != null && passable(L, p.x, p.y, secondary)) { this.fingerBlocked = null; return secondary; }
-    // Seinä edessä: tönäistään kerran, ettei sama "boing" toistu koko ajan
-    const key = `${p.x},${p.y},${primary}`;
-    if (this.fingerBlocked !== key && !p.moving) {
-      this.fingerBlocked = key;
-      this.bumpInto(primary);
-    }
-    return null;
-  }
-
-  stepFinger() {
-    const d = this.nextFingerDir();
-    if (d != null) {
-      this.player.heading = d;
-      this.beginStep(d);
     }
   }
 
@@ -372,63 +384,6 @@ export class Game {
     }
   }
 
-  nextFollowDir() {
-    const p = this.player;
-    if (!p.target) return null;
-    if (p.target.x === p.x && p.target.y === p.y) {
-      p.target = null; p.mode = 'slide'; p.auto = false;
-      return null;
-    }
-    const path = findPath(this.level, { x: p.x, y: p.y }, p.target, p.followMax);
-    if (!path || path.length < 2) {
-      p.target = null; p.mode = 'slide'; p.auto = false;
-      return null;
-    }
-    return dirBetween(path[0], path[1]);
-  }
-
-  stepFollow() {
-    const d = this.nextFollowDir();
-    if (d != null) {
-      this.player.heading = d;
-      this.beginStep(d);
-    }
-  }
-
-  // Mihin suuntaan jatketaan ruudun saavuttamisen jälkeen?
-  chooseNext() {
-    const p = this.player, L = this.level;
-    if (p.mode === 'follow') return this.nextFollowDir();
-    if (p.mode === 'finger') {
-      if (this.finger) return this.nextFingerDir();
-      p.mode = 'slide';
-      p.heading = null;
-      return null;
-    }
-    if (p.queued != null) {
-      // Vanhentunut tai taaksepäin osoittava suunta unohdetaan (kääntyminen hoidetaan heti pyyhkäisyssä)
-      if (this.time - p.queuedAt > QUEUE_TTL || p.queued === OPP[p.heading]) p.queued = null;
-      else if (passable(L, p.x, p.y, p.queued)) {
-        const d = p.queued;
-        p.queued = null;
-        p.heading = d;
-        return d;
-      }
-    }
-    if (p.heading == null) return null;
-    const exits = DIRS.filter((d) => passable(L, p.x, p.y, d));
-    const forward = exits.filter((d) => d !== OPP[p.heading]);
-    if (forward.length === 1) {
-      // käytävä tai mutka: jatketaan itsestään
-      p.heading = forward[0];
-      return forward[0];
-    }
-    // risteys tai umpikuja: pysähdytään ja annetaan Leian valita
-    p.queued = null;
-    p.heading = null;
-    return null;
-  }
-
   updatePlayer(dt) {
     const p = this.player;
     if (p.bump) {
@@ -440,8 +395,7 @@ export class Game {
       p.jump = Math.sin(Math.min(1, p.hopT) * Math.PI) * this.cell * 0.18;
       if (p.hopT >= 1) { p.hopT = 0; p.jump = 0; }
     }
-    if (this.state === 'play' && !p.moving && p.mode === 'follow' && p.target) this.stepFollow();
-    if (this.state === 'play' && !p.moving && p.mode === 'finger' && this.finger && !p.bump) this.stepFinger();
+    if (this.state === 'play' && !p.moving && this.trail.length) this.stepTrail();
     if (p.moving) {
       p.t += dt * SPEED;
       p.walkT += dt;
@@ -452,7 +406,7 @@ export class Game {
         p.moving = false;
         this.enterCell(p.x, p.y);
         if (this.state !== 'play') break;
-        const d = this.chooseNext();
+        const d = this.nextTrailDir();
         if (d != null) {
           this.beginStep(d);
           p.t = over;
@@ -508,11 +462,10 @@ export class Game {
     if (inRoom(L, x, y) && !L.diamond.taken && !L.door.locked) {
       if (x === L.diamond.x && y === L.diamond.y) this.collectDiamond();
       else {
-        p.mode = 'follow';
-        p.target = { x: L.diamond.x, y: L.diamond.y };
-        p.followMax = 12;
-        p.auto = true;
-        p.queued = null;
+        // Huoneessa Leia kävelee itse timantin luo (1–2 askelta)
+        const path = findPath(L, { x, y }, L.diamond) || [];
+        this.trail = path.slice(1);
+        this.autoWalk = this.trail.length > 0;
       }
     }
   }
@@ -550,8 +503,7 @@ export class Game {
     this.state = 'finishing';
     this.finishT = 0;
     p.happy = true;
-    p.mode = 'slide';
-    p.target = null;
+    this.trail = [];
     p.facing = 'down';
     this.hint = null;
     this.audio.diamond();

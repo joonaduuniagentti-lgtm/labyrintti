@@ -587,6 +587,20 @@ function drawActors(g, ctx) {
     });
   };
   const drawP = () => {
+    // Sormi painettu kauas Leiasta: sykkivä rengas vinkkaa, että Leiasta pitää ottaa kiinni
+    if (g.fingerActive && !g.fingerLinked && g.time - g.fingerDownAt > 0.4 && g.state === 'play') {
+      const k = (g.time * 1.6) % 1;
+      ctx.beginPath();
+      ctx.arc(pp.x, pp.y, c * (0.45 + k * 0.45), 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${0.9 * (1 - k)})`;
+      ctx.lineWidth = Math.max(3, c * 0.08);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(pp.x, pp.y, c * 0.48, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,214,10,0.85)';
+      ctx.lineWidth = Math.max(2, c * 0.05);
+      ctx.stroke();
+    }
     drawLeia(ctx, pp.x, pp.y - c * 0.03, c * 0.95, {
       t, facing: pl.facing, walking: pl.moving, walkT: pl.walkT, happy: pl.happy, jump: pl.jump,
     });

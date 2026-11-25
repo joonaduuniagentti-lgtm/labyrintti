@@ -6,10 +6,10 @@ Peli on PWA eli verkkosivu, jonka voi asentaa puhelimen kotinäytölle. Asennett
 
 ## Pelaaminen
 
-- **Pidä sormea ruudulla:** Leia kävelee sormea kohti niin kauan kuin sormi on ruudulla. Kun sormea liikuttaa, Leiaa voi taluttaa labyrintissa. Lähellä (alle kuuden askeleen päässä) Leia osaa kiertää mutkat itse, kauempana hän kulkee suoraan sormen suuntaan, kunnes seinä tulee vastaan.
-- **Nopea pyyhkäisy:** Leia kävelee siihen suuntaan ja pysähtyy seuraavaan risteykseen. Mutkissa hän kääntyy itse.
-- **Napauta** lähellä olevaa ruutua, niin Leia kävelee sinne.
-- Tietokoneella toimivat nuolinäppäimet.
+- **Vedä sormella:** ota kiinni Leiasta (tai aivan hänen vierestään) ja vedä sormea käytäviä pitkin. Leia kulkee täsmälleen samat ruudut kuin sormi eikä koskaan kävele itsestään pidemmälle. Jos sormi menee seinän läpi, Leia jää odottamaan, kunnes sormi palaa hänen luokseen.
+- Kaukaa painaminen ei liikuta Leiaa. Jos sormea pitää kaukana, Leian ympärille ilmestyy sykkivä rengas, joka vinkkaa ottamaan hänestä kiinni.
+- **Napautus Leian päälle:** Leia hyppää.
+- Tietokoneella nuolinäppäin siirtää Leiaa yhden askeleen.
 
 Peliä ei voi hävitä: siinä ei ole aikarajaa eikä vihollisia. Jos avaimia ei löydy noin 15 sekuntiin, haamu vilkuttaa ja näyttää puhekuplassa, minkä värinen avain on seuraavaksi lähimpänä.
 
