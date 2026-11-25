@@ -8,6 +8,17 @@ import { drawLeia, drawGhost, drawDiamond, drawCoin, drawSparkle } from './sprit
 
 const $ = (id) => document.getElementById(id);
 const store = new Store();
+// Joka käynnistyksellä aloitetaan kentästä 1. Aarteet, kolikot ja asetukset säilyvät.
+// Pelin oma päivityslataus (alla) ei nollaa kenttää.
+let keepLevel = false;
+try {
+  keepLevel = sessionStorage.getItem('labyrintti-reload') === '1';
+  sessionStorage.removeItem('labyrintti-reload');
+} catch (e) { /* ei sessionStoragea */ }
+if (!keepLevel) {
+  store.data.level = 1;
+  store.save();
+}
 const audio = new AudioEngine(store);
 const canvas = $('game');
 const game = new Game(canvas, audio, { onLevelComplete });
@@ -28,9 +39,14 @@ function refresh() {
   applyThemeColors();
 }
 
+function reloadForUpdate() {
+  try { sessionStorage.setItem('labyrintti-reload', '1'); } catch (e) { /* ok */ }
+  location.reload();
+}
+
 function setBase(b) {
   if (b === 'start' && updateReady) {
-    location.reload();
+    reloadForUpdate();
     return;
   }
   base = b;
@@ -341,7 +357,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController || updateReady) return;
     updateReady = true;
-    if (base === 'start') location.reload();
+    if (base === 'start') reloadForUpdate();
   });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

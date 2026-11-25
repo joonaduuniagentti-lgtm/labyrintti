@@ -19,6 +19,8 @@ Kentät 1–12 näkyvät kokonaan ruudulla. Kentästä 13 alkaen labyrintti kasv
 
 ## Vanhemmille
 
+Peli alkaa aina kentästä 1, kun se avataan uudelleen. Kerätyt timantit ja kolikot säilyvät aarrearkussa, ja jo avattuihin kenttiin pääsee vanhempien valikosta.
+
 Pidä **ratasnappia** (oikea yläkulma) pohjassa kaksi sekuntia. Valikossa voi:
 
 - valita jo avatun kentän,
