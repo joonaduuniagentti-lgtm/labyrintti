@@ -6,8 +6,8 @@ Peli on PWA eli verkkosivu, jonka voi asentaa puhelimen kotinäytölle. Asennett
 
 ## Pelaaminen
 
-- **Pyyhkäise** mihin tahansa kohtaan ruutua: Leia kävelee siihen suuntaan ja pysähtyy seuraavaan risteykseen. Mutkissa hän kääntyy itse.
-- **Tartu Leiaan ja vedä**: Leia seuraa sormea käytäviä pitkin.
+- **Pidä sormea ruudulla:** Leia kävelee sormea kohti niin kauan kuin sormi on ruudulla. Kun sormea liikuttaa, Leiaa voi taluttaa labyrintissa. Lähellä (alle kuuden askeleen päässä) Leia osaa kiertää mutkat itse, kauempana hän kulkee suoraan sormen suuntaan, kunnes seinä tulee vastaan.
+- **Nopea pyyhkäisy:** Leia kävelee siihen suuntaan ja pysähtyy seuraavaan risteykseen. Mutkissa hän kääntyy itse.
 - **Napauta** lähellä olevaa ruutua, niin Leia kävelee sinne.
 - Tietokoneella toimivat nuolinäppäimet.
 

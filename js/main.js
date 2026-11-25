@@ -29,6 +29,10 @@ function refresh() {
 }
 
 function setBase(b) {
+  if (b === 'start' && updateReady) {
+    location.reload();
+    return;
+  }
   base = b;
   refresh();
   if (b === 'start') renderStart();
@@ -330,7 +334,15 @@ const onResize = () => {
 window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', onResize);
 
+// Uusi versio: ladataan sivu uudelleen, kun ollaan aloitusnäytöllä (ei kesken kentän)
+let updateReady = false;
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || updateReady) return;
+    updateReady = true;
+    if (base === 'start') location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   });

@@ -123,7 +123,7 @@ export class Game {
       x: L.start.x, y: L.start.y, px: L.start.x, py: L.start.y,
       from: null, to: null, t: 0, dir: null, moving: false,
       heading: null, queued: null, queuedAt: 0, facing: 'down',
-      mode: 'slide', target: null, followMax: 6, bump: null, walkT: 0, jump: 0, happy: false,
+      mode: 'slide', target: null, followMax: 6, auto: false, bump: null, walkT: 0, jump: 0, happy: false,
     };
     this.ghost = { x: L.ghost.x, y: L.ghost.y, mood: 'idle', moodUntil: 0, bubble: null, bubbleUntil: 0, bubbleAt: 0, bubbleColor: null };
     this.keyholes = L.keys.map((k) => ({ color: k.color, filled: false, filledAt: 0, flash: 0 }));
@@ -136,7 +136,8 @@ export class Game {
     this.hint = null;
     this.lastProgress = this.time;
     this.nextHintAt = this.time + HINT_DELAY;
-    this.dragging = false;
+    this.finger = null;
+    this.fingerBlocked = null;
     this.state = 'play';
     this.finishT = 0;
     this.banner = { title: `Kenttä ${n}`, sub: this.theme.name, t: 0 };
@@ -219,30 +220,71 @@ export class Game {
     }
   }
 
-  isNearPlayer(px, py) {
-    if (!this.level) return false;
-    const c = this.cellCenter(this.player.px, this.player.py);
-    return Math.hypot(px - c.x, py - c.y) < this.cell * 0.8;
-  }
-
-  dragStart(px, py) {
+  // Sormi pohjassa: Leia kävelee sormea kohti niin kauan kuin sormi on ruudulla.
+  // Lähellä (muutaman askeleen päässä) hän osaa kiertää mutkat, kauempana hän
+  // kulkee suoraan sormen suuntaan, kunnes seinä tulee vastaan.
+  fingerHold(px, py) {
     if (!this.acceptsInput()) return;
-    this.dragging = true;
     const p = this.player;
-    p.mode = 'follow';
-    p.followMax = 6;
+    this.finger = { x: px, y: py };
+    this.fingerBlocked = null;
+    if (p.auto) return;
+    p.mode = 'finger';
+    p.target = null;
     p.queued = null;
-    p.target = this.cellAt(px, py) || { x: p.x, y: p.y };
+    if (!p.moving) this.stepFinger();
   }
 
-  dragMove(px, py) {
-    if (!this.dragging || !this.acceptsInput()) return;
-    const c = this.cellAt(px, py);
-    if (c) this.player.target = c;
+  fingerMove(px, py) {
+    if (!this.finger) return;
+    this.finger.x = px;
+    this.finger.y = py;
   }
 
-  dragEnd() {
-    this.dragging = false;
+  fingerRelease() {
+    this.finger = null;
+    this.fingerBlocked = null;
+  }
+
+  fingerCell() {
+    const L = this.level, f = this.finger;
+    const x = Math.floor((f.x - this.ox) / this.cell), y = Math.floor((f.y - this.oy) / this.cell);
+    return { x: Math.max(0, Math.min(L.cols - 1, x)), y: Math.max(0, Math.min(L.rows - 1, y)) };
+  }
+
+  nextFingerDir() {
+    const p = this.player, L = this.level;
+    if (!this.finger) return null;
+    const c = this.fingerCell();
+    if (c.x === p.x && c.y === p.y) return null;
+    const path = findPath(L, { x: p.x, y: p.y }, c, 6);
+    if (path && path.length > 1) {
+      this.fingerBlocked = null;
+      return dirBetween(path[0], path[1]);
+    }
+    const pc = this.cellCenter(p.x, p.y);
+    const dx = (this.finger.x - pc.x) / this.cell, dy = (this.finger.y - pc.y) / this.cell;
+    const horiz = Math.abs(dx) > Math.abs(dy);
+    const primary = horiz ? (dx > 0 ? E : W) : (dy > 0 ? S : N);
+    const minor = horiz ? dy : dx;
+    const secondary = Math.abs(minor) > 0.5 ? (horiz ? (dy > 0 ? S : N) : (dx > 0 ? E : W)) : null;
+    if (passable(L, p.x, p.y, primary)) { this.fingerBlocked = null; return primary; }
+    if (secondary != null && passable(L, p.x, p.y, secondary)) { this.fingerBlocked = null; return secondary; }
+    // Seinä edessä: tönäistään kerran, ettei sama "boing" toistu koko ajan
+    const key = `${p.x},${p.y},${primary}`;
+    if (this.fingerBlocked !== key && !p.moving) {
+      this.fingerBlocked = key;
+      this.bumpInto(primary);
+    }
+    return null;
+  }
+
+  stepFinger() {
+    const d = this.nextFingerDir();
+    if (d != null) {
+      this.player.heading = d;
+      this.beginStep(d);
+    }
   }
 
   // ------------------------------------------------------------ liike
@@ -277,12 +319,12 @@ export class Game {
     const p = this.player;
     if (!p.target) return null;
     if (p.target.x === p.x && p.target.y === p.y) {
-      if (!this.dragging) { p.target = null; p.mode = 'slide'; }
+      p.target = null; p.mode = 'slide'; p.auto = false;
       return null;
     }
     const path = findPath(this.level, { x: p.x, y: p.y }, p.target, p.followMax);
     if (!path || path.length < 2) {
-      if (!this.dragging) { p.target = null; p.mode = 'slide'; }
+      p.target = null; p.mode = 'slide'; p.auto = false;
       return null;
     }
     return dirBetween(path[0], path[1]);
@@ -300,6 +342,12 @@ export class Game {
   chooseNext() {
     const p = this.player, L = this.level;
     if (p.mode === 'follow') return this.nextFollowDir();
+    if (p.mode === 'finger') {
+      if (this.finger) return this.nextFingerDir();
+      p.mode = 'slide';
+      p.heading = null;
+      return null;
+    }
     if (p.queued != null) {
       // Vanhentunut tai taaksepäin osoittava suunta unohdetaan (kääntyminen hoidetaan heti pyyhkäisyssä)
       if (this.time - p.queuedAt > QUEUE_TTL || p.queued === OPP[p.heading]) p.queued = null;
@@ -336,6 +384,7 @@ export class Game {
       if (p.hopT >= 1) { p.hopT = 0; p.jump = 0; }
     }
     if (this.state === 'play' && !p.moving && p.mode === 'follow' && p.target) this.stepFollow();
+    if (this.state === 'play' && !p.moving && p.mode === 'finger' && this.finger && !p.bump) this.stepFinger();
     if (p.moving) {
       p.t += dt * SPEED;
       p.walkT += dt;
@@ -402,6 +451,7 @@ export class Game {
         p.mode = 'follow';
         p.target = { x: L.diamond.x, y: L.diamond.y };
         p.followMax = 12;
+        p.auto = true;
         p.queued = null;
       }
     }
