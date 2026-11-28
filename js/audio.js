@@ -176,6 +176,16 @@ export class AudioEngine {
       this.tone(f, 0.08, { to: f * 1.15, vol: 0.13, at: i * 0.1 });
     }
   }
+  purchase() {
+    if (!this.ok()) return;
+    [988, 1319, 988, 1319, 1568, 2093].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', vol: 0.16, at: i * 0.06 }));
+    [1047, 1319, 1568, 2093].forEach((f) => this.tone(f, 0.9, { type: 'triangle', vol: 0.06, at: 0.42 }));
+    for (let i = 0; i < 6; i++) this.tone(2400 + Math.random() * 2000, 0.25, { vol: 0.03, at: 0.45 + i * 0.07 });
+  }
+  wear() {
+    if (!this.ok()) return;
+    [784, 1047, 1319].forEach((f, i) => this.tone(f, 0.3, { vol: 0.12, at: i * 0.08 }));
+  }
   fanfare() {
     if (!this.ok()) return;
     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', vol: 0.18, at: i * 0.12 }));

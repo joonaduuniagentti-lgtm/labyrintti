@@ -602,7 +602,7 @@ function drawActors(g, ctx) {
       ctx.stroke();
     }
     drawLeia(ctx, pp.x, pp.y - c * 0.03, c * 0.95, {
-      t, facing: pl.facing, walking: pl.moving, walkT: pl.walkT, happy: pl.happy, jump: pl.jump,
+      t, facing: pl.facing, walking: pl.moving, walkT: pl.walkT, happy: pl.happy, jump: pl.jump, outfit: g.outfit,
     });
   };
   if (gp.y < pp.y) { drawG(); drawP(); } else { drawP(); drawG(); }

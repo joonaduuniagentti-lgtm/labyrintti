@@ -46,6 +46,11 @@
         <canvas id="chip-diamond" width="64" height="64" aria-hidden="true"></canvas>
         <span id="diamond-count">0</span>
       </button>
+      <button id="btn-wardrobe" class="chip-btn" aria-label="Vaatekaappi">
+        <canvas id="chip-dress" width="64" height="64" aria-hidden="true"></canvas>
+        <canvas id="chip-coin" class="coin-icon" width="64" height="64" aria-hidden="true"></canvas>
+        <span id="coin-count">0</span>
+      </button>
     </div>
     <div class="level-label" id="start-level"></div>
   </section>
@@ -58,6 +63,29 @@
     <h2 class="title small">Aarteet</h2>
     <div class="treasure-stats" id="treasure-stats"></div>
     <div id="treasure-grid"></div>
+  </section>
+
+  <!-- Vaatekaappi: mekot ostetaan kolikoilla -->
+  <section id="screen-wardrobe" class="screen hidden">
+    <button id="btn-wardrobe-back" class="round-btn corner-left" aria-label="Takaisin">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M29 10 15 24l14 14" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="wallet" aria-label="Kolikot">
+      <canvas id="wallet-coin" class="coin-icon" width="64" height="64" aria-hidden="true"></canvas>
+      <span id="wallet-value">0</span>
+    </div>
+    <div class="wardrobe-top">
+      <canvas id="wardrobe-preview" aria-hidden="true"></canvas>
+      <div class="wardrobe-side">
+        <div class="dress-name" id="dress-name"></div>
+        <button id="btn-dress-action" class="action-btn"></button>
+        <div id="dress-progress" class="dress-progress hidden">
+          <div class="bar"><i id="dress-progress-fill"></i></div>
+          <div class="progress-text"><canvas class="coin-icon" width="64" height="64" aria-hidden="true"></canvas><span id="dress-progress-text"></span></div>
+        </div>
+      </div>
+    </div>
+    <div id="dress-grid"></div>
   </section>
 
   <!-- Kentän läpäisy -->

@@ -9,6 +9,8 @@ const DEFAULTS = () => ({
   sound: true,
   music: true,
   cap: null,       // vaikein kenttä (null = ei rajaa); säilyy myös uudelleenkäynnistyksessä
+  dress: 'pinkki', // Leian päällä oleva mekko
+  owned: ['pinkki'], // ostetut mekot
 });
 
 export class Store {
@@ -19,6 +21,8 @@ export class Store {
       if (raw) Object.assign(this.data, JSON.parse(raw));
     } catch (e) { /* yksityinen selaus tms. */ }
     if (!Array.isArray(this.data.diamonds)) this.data.diamonds = [];
+    if (!Array.isArray(this.data.owned)) this.data.owned = ['pinkki'];
+    if (!this.data.owned.includes('pinkki')) this.data.owned.unshift('pinkki');
   }
 
   save() {
@@ -28,8 +32,9 @@ export class Store {
   }
 
   resetProgress() {
-    const { sound, music, cap } = this.data;
-    this.data = { ...DEFAULTS(), sound, music, cap };
+    // Ostetut mekot jäävät Leialle, vaikka kentät, timantit ja kolikot nollataan
+    const { sound, music, cap, dress, owned } = this.data;
+    this.data = { ...DEFAULTS(), sound, music, cap, dress, owned };
     this.save();
   }
 }

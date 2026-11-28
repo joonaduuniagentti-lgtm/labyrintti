@@ -4,7 +4,8 @@ import { AudioEngine } from './audio.js';
 import { Game } from './game.js';
 import { attachInput } from './input.js';
 import { THEMES, themeForLevel, themeIndexForLevel, themeById } from './themes.js';
-import { drawLeia, drawGhost, drawDiamond, drawCoin, drawSparkle } from './sprites.js';
+import { drawLeia, drawGhost, drawDiamond, drawCoin, drawSparkle, drawDressIcon } from './sprites.js';
+import { DRESSES, dressById } from './dresses.js';
 
 const $ = (id) => document.getElementById(id);
 const store = new Store();
@@ -22,9 +23,11 @@ if (!keepLevel) {
 const audio = new AudioEngine(store);
 const canvas = $('game');
 const game = new Game(canvas, audio, { onLevelComplete });
+const outfit = () => dressById(store.data.dress);
+game.outfit = outfit();
 attachInput(canvas, game);
 
-let base = 'start'; // start | game | treasure | celebrate
+let base = 'start'; // start | game | treasure | wardrobe | celebrate
 let parentOpen = false;
 let parentLevel = 1;
 
@@ -50,6 +53,7 @@ function startLevel(n) {
 function refresh() {
   $('screen-start').classList.toggle('hidden', base !== 'start');
   $('screen-treasure').classList.toggle('hidden', base !== 'treasure');
+  $('screen-wardrobe').classList.toggle('hidden', base !== 'wardrobe');
   $('screen-celebrate').classList.toggle('hidden', base !== 'celebrate');
   $('hud').classList.toggle('hidden', base !== 'game');
   $('screen-parent').classList.toggle('hidden', !parentOpen);
@@ -88,6 +92,19 @@ function renderStart() {
   const cx = chip.getContext('2d');
   cx.clearRect(0, 0, 64, 64);
   drawDiamond(cx, 32, 34, 50, T.diamond, 0.6);
+  const dc = $('chip-dress').getContext('2d');
+  dc.clearRect(0, 0, 64, 64);
+  drawDressIcon(dc, 32, 32, 56, outfit(), 0.6);
+  $('coin-count').textContent = String(store.data.coins);
+  drawCoinIcons();
+}
+
+function drawCoinIcons() {
+  document.querySelectorAll('canvas.coin-icon').forEach((c) => {
+    const x = c.getContext('2d');
+    x.clearRect(0, 0, c.width, c.height);
+    drawCoin(x, c.width / 2, c.height / 2, c.width * 0.8, 1);
+  });
 }
 
 // ---------------------------------------------------------------- pelin kulku
@@ -192,6 +209,172 @@ function renderTreasure() {
     el.appendChild(document.createTextNode(String(d.level)));
     grid.appendChild(el);
   }
+}
+
+// ---------------------------------------------------------------- vaatekaappi
+let wardrobeSel = store.data.dress;
+let wardrobeT = 0;
+let wardrobeJoy = 0;
+let wardrobeParticles = [];
+
+$('btn-wardrobe').addEventListener('click', () => {
+  audio.unlock();
+  audio.tap();
+  wardrobeSel = store.data.dress;
+  renderWardrobe(true);
+  setBase('wardrobe');
+});
+$('btn-wardrobe-back').addEventListener('click', () => {
+  audio.tap();
+  setBase('start');
+});
+
+function renderWardrobe(scrollToSelected = false) {
+  $('wallet-value').textContent = String(store.data.coins);
+  drawCoinIcons();
+  const grid = $('dress-grid');
+  grid.innerHTML = '';
+  for (const d of DRESSES) {
+    const owned = store.data.owned.includes(d.id);
+    const btn = document.createElement('button');
+    btn.className = 'dress-card' + (owned ? ' owned' : '') + (d.id === wardrobeSel ? ' selected' : '') + (d.id === store.data.dress ? ' worn' : '');
+    btn.setAttribute('aria-label', d.name);
+    const c = document.createElement('canvas');
+    c.className = 'leia';
+    c.width = 140;
+    c.height = 168;
+    drawLeia(c.getContext('2d'), 70, 96, 128, { t: 0.4, outfit: d, noShadow: true });
+    btn.appendChild(c);
+    const price = document.createElement('span');
+    price.className = 'price';
+    if (owned) {
+      price.textContent = d.id === store.data.dress ? '✓ päällä' : '✓';
+    } else {
+      const ci = document.createElement('canvas');
+      ci.width = 36;
+      ci.height = 36;
+      drawCoin(ci.getContext('2d'), 18, 18, 30, 1);
+      price.appendChild(ci);
+      price.appendChild(document.createTextNode(String(d.price)));
+    }
+    btn.appendChild(price);
+    btn.addEventListener('click', () => {
+      audio.tap();
+      wardrobeSel = d.id;
+      wardrobeJoy = 0.6;
+      renderWardrobe();
+    });
+    grid.appendChild(btn);
+    if (scrollToSelected && d.id === wardrobeSel) requestAnimationFrame(() => btn.scrollIntoView({ block: 'nearest' }));
+  }
+  updateWardrobeAction();
+}
+
+function updateWardrobeAction() {
+  const d = dressById(wardrobeSel);
+  const owned = store.data.owned.includes(d.id);
+  const worn = store.data.dress === d.id;
+  const coins = store.data.coins;
+  const btn = $('btn-dress-action');
+  $('dress-name').textContent = d.name;
+  btn.className = 'action-btn';
+  btn.innerHTML = '';
+  btn.classList.remove('hidden');
+  $('dress-progress').classList.add('hidden');
+  if (worn) {
+    btn.classList.add('worn');
+    btn.textContent = '✓ Päällä';
+  } else if (owned) {
+    btn.classList.add('wear');
+    btn.textContent = 'Pue päälle';
+  } else if (coins >= d.price) {
+    const ci = document.createElement('canvas');
+    ci.width = 64;
+    ci.height = 64;
+    drawCoin(ci.getContext('2d'), 32, 32, 54, 1);
+    btn.appendChild(document.createTextNode('Osta'));
+    btn.appendChild(ci);
+    btn.appendChild(document.createTextNode(String(d.price)));
+  } else {
+    btn.classList.add('hidden');
+    $('dress-progress').classList.remove('hidden');
+    $('dress-progress-fill').style.width = `${Math.round((coins / d.price) * 100)}%`;
+    $('dress-progress-text').textContent = `${coins} / ${d.price}`;
+  }
+}
+
+$('btn-dress-action').addEventListener('click', () => {
+  const d = dressById(wardrobeSel);
+  const owned = store.data.owned.includes(d.id);
+  if (store.data.dress === d.id) return;
+  if (!owned) {
+    if (store.data.coins < d.price) return;
+    store.data.coins -= d.price;
+    store.data.owned.push(d.id);
+    audio.purchase();
+    wardrobeJoy = 2.5;
+    wardrobeConfetti();
+  } else {
+    audio.wear();
+    wardrobeJoy = 1.2;
+  }
+  store.data.dress = d.id;
+  store.save();
+  game.outfit = outfit();
+  renderWardrobe();
+});
+
+function wardrobeConfetti() {
+  const cols = ['#ff4d6d', '#ffbe0b', '#3a86ff', '#2ec27e', '#ff5fa2', '#9b5de5', '#ffffff'];
+  for (let i = 0; i < 60; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 80 + Math.random() * 180;
+    wardrobeParticles.push({
+      x: 0.5, y: 0.45, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, life: 1.6 + Math.random(),
+      size: 5 + Math.random() * 6, color: cols[i % cols.length], rot: Math.random() * 6, spark: i % 4 === 0,
+    });
+  }
+}
+
+function drawWardrobePreview(dt) {
+  wardrobeT += dt;
+  if (wardrobeJoy > 0) wardrobeJoy -= dt;
+  const { ctx, w, h } = fitCanvas($('wardrobe-preview'));
+  if (!w) return;
+  ctx.clearRect(0, 0, w, h);
+  const d = dressById(wardrobeSel);
+  const gr = ctx.createRadialGradient(w / 2, h * 0.55, 0, w / 2, h * 0.55, w * 0.5);
+  gr.addColorStop(0, 'rgba(255,255,255,0.85)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr;
+  ctx.fillRect(0, 0, w, h);
+  const joy = wardrobeJoy > 0;
+  const jump = joy ? Math.abs(Math.sin(wardrobeT * 6)) * h * 0.06 : 0;
+  // pyörähdys: välillä Leia kääntyy näyttämään mekon sivulta ja takaa
+  const phase = (wardrobeT * 0.35) % 4;
+  const facing = joy ? 'down' : phase < 2.6 ? 'down' : phase < 3 ? 'right' : phase < 3.6 ? 'up' : 'left';
+  drawLeia(ctx, w / 2, h * 0.5, Math.min(w, h) * 0.78, { t: wardrobeT, outfit: d, happy: joy, jump, facing });
+  for (let i = 0; i < 3; i++) {
+    const a = wardrobeT * 1.2 + (i * Math.PI * 2) / 3;
+    drawSparkle(ctx, w / 2 + Math.cos(a) * w * 0.38, h * 0.5 + Math.sin(a) * h * 0.3, w * 0.025 * (0.6 + 0.4 * Math.sin(wardrobeT * 5 + i)), '#ffffff');
+  }
+  for (const p of wardrobeParticles) {
+    p.life -= dt;
+    p.vy += 260 * dt;
+    p.x += (p.vx * dt) / w;
+    p.y += (p.vy * dt) / h;
+    p.rot += dt * 6;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+    ctx.translate(p.x * w, p.y * h);
+    if (p.spark) drawSparkle(ctx, 0, 0, p.size, p.color);
+    else {
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+    }
+    ctx.restore();
+  }
+  wardrobeParticles = wardrobeParticles.filter((p) => p.life > 0);
 }
 
 // ---------------------------------------------------------------- vanhempien valikko
@@ -337,7 +520,7 @@ function drawStartArt(dt) {
     const a = artT * 1.3 + (i * Math.PI) / 2;
     drawSparkle(ctx, w / 2 + Math.cos(a) * s * 0.45, gy + Math.sin(a) * s * 0.3, s * 0.06 * (0.6 + 0.4 * Math.sin(artT * 5 + i)), '#ffffff');
   }
-  drawLeia(ctx, w * 0.2, h * 0.5, s, { t: artT, facing: 'right', happy: Math.sin(artT * 0.8) > 0.6 });
+  drawLeia(ctx, w * 0.2, h * 0.5, s, { t: artT, facing: 'right', happy: Math.sin(artT * 0.8) > 0.6, outfit: outfit() });
   drawGhost(ctx, w * 0.8, h * 0.42 + Math.sin(artT * 2.2) * 6, s * 0.85, {
     t: artT, mood: Math.sin(artT * 0.7) > 0.7 ? 'wave' : 'idle', lookX: -1, lookY: 0.2, costume: T.costume,
   });
@@ -375,7 +558,7 @@ function drawCelebrate(dt) {
     drawSparkle(ctx, cx + Math.cos(a) * ds * 0.75, cy + Math.sin(a) * ds * 0.6, ds * 0.08 * (0.6 + 0.4 * Math.sin(celebrateT * 6 + i)), '#ffffff');
   }
   const jump = Math.abs(Math.sin(celebrateT * 5)) * s * 0.06;
-  drawLeia(ctx, w * 0.2, h * 0.72, s * 0.34, { t: celebrateT, happy: true, jump });
+  drawLeia(ctx, w * 0.2, h * 0.72, s * 0.34, { t: celebrateT, happy: true, jump, outfit: outfit() });
   drawGhost(ctx, w * 0.8, h * 0.66 + Math.sin(celebrateT * 4) * 6, s * 0.3, {
     t: celebrateT, mood: 'party', costume: T.costume,
   });
@@ -390,6 +573,7 @@ function frame(now) {
   if (base === 'game' || base === 'celebrate') game.render();
   if (base === 'start') drawStartArt(dt);
   if (base === 'celebrate') drawCelebrate(dt);
+  if (base === 'wardrobe') drawWardrobePreview(dt);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
